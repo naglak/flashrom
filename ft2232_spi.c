@@ -40,6 +40,7 @@
 #define FTDI_FT232H_PID		0x6014
 #define TIAO_TUMPA_PID		0x8a98
 #define TIAO_TUMPA_LITE_PID	0x8a99
+#define KT_LINK_PID		0xbbe2
 #define AMONTEC_JTAGKEY_PID	0xCFF8
 
 #define GOEPEL_VID		0x096C
@@ -66,6 +67,7 @@ const struct dev_entry devs_ft2232spi[] = {
 	{FTDI_VID, TIAO_TUMPA_PID, OK, "TIAO", "USB Multi-Protocol Adapter"},
 	{FTDI_VID, TIAO_TUMPA_LITE_PID, OK, "TIAO", "USB Multi-Protocol Adapter Lite"},
 	{FTDI_VID, AMONTEC_JTAGKEY_PID, OK, "Amontec", "JTAGkey"},
+	{FTDI_VID, KT_LINK_PID, OK, "Kristech", "KT-LINK"},
 	{GOEPEL_VID, GOEPEL_PICOTAP_PID, OK, "GOEPEL", "PicoTAP"},
 	{GOOGLE_VID, GOOGLE_SERVO_PID, OK, "Google", "Servo"},
 	{GOOGLE_VID, GOOGLE_SERVO_V2_PID0, OK, "Google", "Servo V2 Legacy"},
@@ -84,6 +86,10 @@ const struct dev_entry devs_ft2232spi[] = {
 #define BITMODE_BITBANG_NORMAL	1
 #define BITMODE_BITBANG_SPI	2
 
+/* dont change values of GPIOL bits during asserting CS */
+#define CS_BIT			0x08
+
+
 /* The variables cs_bits and pindir store the values for the "set data bits low byte" MPSSE command that
  * sets the initial state and the direction of the I/O pins. The pin offsets are as follows:
  * SCK is bit 0.
@@ -97,6 +103,9 @@ const struct dev_entry devs_ft2232spi[] = {
  */
 static uint8_t cs_bits = 0x08;
 static uint8_t pindir = 0x0b;
+/* high bits are needed for kt-link */
+static uint8_t cs_bits_h = 0x00;
+static uint8_t pindir_h = 0x00;
 static struct ftdi_context ftdic_context;
 
 static const char *get_ft2232_devicename(int ft2232_vid, int ft2232_type)
@@ -231,6 +240,17 @@ int ft2232_spi_init(void)
 			channel_count = 2;
 			cs_bits = 0x18;
 			pindir = 0x1b;
+		} else if (!strcasecmp(arg, "kt-link")) {
+			ft2232_type = KT_LINK_PID;
+			/* port B hardware buffers prevent SPI - only 2 outputs */
+			channel_count = 1;
+			/* set ADBUS5 out high */
+			cs_bits = 0x28;
+			pindir = 0x2b;
+			/* init of high bits required */
+			cs_bits_h = 0x00;
+			pindir_h = 0x70;
+			/* gpioh7 controls red led*/
 		} else if (!strcasecmp(arg, "openmoko")) {
 			ft2232_vid = FIC_VID;
 			ft2232_type = OPENMOKO_DBGBOARD_PID;
@@ -423,6 +443,17 @@ int ft2232_spi_init(void)
 		goto ftdi_err;
 	}
 
+	if (cs_bits_h || pindir_h) {
+		msg_pdbg("Set data bits high\n");
+		buf[0] = SET_BITS_HIGH;
+		buf[1] = cs_bits_h;
+		buf[2] = pindir_h;
+		if (send_buf(ftdic, buf, 3)) {
+			ret = -8;
+			goto ftdi_err;
+		}
+	}
+
 	msg_pdbg("Set data bits\n");
 	buf[0] = SET_BITS_LOW;
 	buf[1] = cs_bits;
@@ -480,7 +511,7 @@ static int ft2232_spi_send_command(struct flashctx *flash,
 	 */
 	msg_pspew("Assert CS#\n");
 	buf[i++] = SET_BITS_LOW;
-	buf[i++] = 0 & ~cs_bits; /* assertive */
+	buf[i++] = cs_bits & ~CS_BIT;
 	buf[i++] = pindir;
 
 	if (writecnt) {
