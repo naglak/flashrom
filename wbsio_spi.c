@@ -65,7 +65,6 @@ static int wbsio_spi_read(struct flashctx *flash, uint8_t *buf,
 			  unsigned int start, unsigned int len);
 
 static const struct spi_master spi_master_wbsio = {
-	.type = SPI_CONTROLLER_WBSIO,
 	.max_data_read = MAX_DATA_UNSPECIFIED,
 	.max_data_write = MAX_DATA_UNSPECIFIED,
 	.command = wbsio_spi_send_command,
@@ -116,7 +115,7 @@ static int wbsio_spi_send_command(struct flashctx *flash, unsigned int writecnt,
 				  const unsigned char *writearr,
 				  unsigned char *readarr)
 {
-	int i;
+	unsigned int i;
 	uint8_t mode = 0;
 
 	msg_pspew("%s:", __func__);

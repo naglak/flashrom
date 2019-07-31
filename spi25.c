@@ -100,9 +100,11 @@ static int probe_spi_rdid_generic(struct flashctx *flash, int bytes)
 	uint32_t id1;
 	uint32_t id2;
 
-	if (spi_rdid(flash, readarr, bytes)) {
+	const int ret = spi_rdid(flash, readarr, bytes);
+	if (ret == SPI_INVALID_LENGTH)
+		msg_cinfo("%d byte RDID not supported on this SPI controller\n", bytes);
+	if (ret)
 		return 0;
-	}
 
 	if (!oddparity(readarr[0]))
 		msg_cdbg("RDID byte 0 parity violation. ");
@@ -147,24 +149,7 @@ int probe_spi_rdid(struct flashctx *flash)
 
 int probe_spi_rdid4(struct flashctx *flash)
 {
-	/* Some SPI controllers do not support commands with writecnt=1 and
-	 * readcnt=4.
-	 */
-	switch (flash->mst->spi.type) {
-#if CONFIG_INTERNAL == 1
-#if defined(__i386__) || defined(__x86_64__)
-	case SPI_CONTROLLER_IT87XX:
-	case SPI_CONTROLLER_WBSIO:
-		msg_cinfo("4 byte RDID not supported on this SPI controller\n");
-		return 0;
-		break;
-#endif
-#endif
-	default:
-		return probe_spi_rdid_generic(flash, 4);
-	}
-
-	return 0;
+	return probe_spi_rdid_generic(flash, 4);
 }
 
 int probe_spi_rems(struct flashctx *flash)
@@ -455,19 +440,19 @@ static int spi_write_cmd(struct flashctx *const flash, const uint8_t op,
 	return result ? result : status;
 }
 
-int spi_chip_erase_60(struct flashctx *flash)
+static int spi_chip_erase_60(struct flashctx *flash)
 {
 	/* This usually takes 1-85s, so wait in 1s steps. */
 	return spi_simple_write_cmd(flash, 0x60, 1000 * 1000);
 }
 
-int spi_chip_erase_62(struct flashctx *flash)
+static int spi_chip_erase_62(struct flashctx *flash)
 {
 	/* This usually takes 2-5s, so wait in 100ms steps. */
 	return spi_simple_write_cmd(flash, 0x62, 100 * 1000);
 }
 
-int spi_chip_erase_c7(struct flashctx *flash)
+static int spi_chip_erase_c7(struct flashctx *flash)
 {
 	/* This usually takes 1-85s, so wait in 1s steps. */
 	return spi_simple_write_cmd(flash, 0xc7, 1000 * 1000);
@@ -797,7 +782,6 @@ int default_spi_write_aai(struct flashctx *flash, const uint8_t *buf, unsigned i
 	if (pos < start + len) {
 		if (spi_chip_write_1(flash, buf + pos - start, pos, pos % 2))
 			return SPI_GENERIC_ERROR;
-		pos += pos % 2;
 	}
 
 	return 0;

@@ -43,7 +43,7 @@
 #define REQTYPE_OTHER_IN (LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_OTHER)	/* 0xC3 */
 #define REQTYPE_EP_OUT (LIBUSB_ENDPOINT_OUT | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_ENDPOINT)	/* 0x42 */
 #define REQTYPE_EP_IN (LIBUSB_ENDPOINT_IN | LIBUSB_REQUEST_TYPE_VENDOR | LIBUSB_RECIPIENT_ENDPOINT)	/* 0xC2 */
-struct libusb_context *usb_ctx;
+static struct libusb_context *usb_ctx;
 static libusb_device_handle *dediprog_handle;
 static int dediprog_in_endpoint;
 static int dediprog_out_endpoint;
@@ -159,7 +159,7 @@ const struct dev_entry devs_dediprog[] = {
 };
 
 static int dediprog_firmwareversion = FIRMWARE_VERSION(0, 0, 0);
-enum dediprog_devtype dediprog_devicetype = DEV_UNKNOWN;
+static enum dediprog_devtype dediprog_devicetype = DEV_UNKNOWN;
 
 #if defined(LIBUSB_MAJOR) && defined(LIBUSB_MINOR) && defined(LIBUSB_MICRO) && \
     LIBUSB_MAJOR <= 1 && LIBUSB_MINOR == 0 && LIBUSB_MICRO < 9
@@ -474,7 +474,7 @@ static int dediprog_spi_bulk_read(struct flashctx *flash, uint8_t *buf, unsigned
 		return 1;
 
 	int ret = dediprog_write(CMD_READ, value, idx, data_packet, sizeof(data_packet));
-	if (ret != sizeof(data_packet)) {
+	if (ret != (int)sizeof(data_packet)) {
 		msg_perr("Command Read SPI Bulk failed, %i %s!\n", ret, libusb_error_name(ret));
 		return 1;
 	}
@@ -487,7 +487,7 @@ static int dediprog_spi_bulk_read(struct flashctx *flash, uint8_t *buf, unsigned
 
 	/* Allocate bulk transfers. */
 	unsigned int i;
-	for (i = 0; i < min(DEDIPROG_ASYNC_TRANSFERS, count); ++i) {
+	for (i = 0; i < MIN(DEDIPROG_ASYNC_TRANSFERS, count); ++i) {
 		transfers[i] = libusb_alloc_transfer(0);
 		if (!transfers[i]) {
 			msg_perr("Allocating libusb transfer %i failed: %s!\n", i, libusb_error_name(ret));
@@ -630,7 +630,7 @@ static int dediprog_spi_bulk_write(struct flashctx *flash, const uint8_t *buf, u
 	if (prepare_rw_cmd(flash, data_packet, count, dedi_spi_cmd, &value, &idx, start, 0))
 		return 1;
 	int ret = dediprog_write(CMD_WRITE, value, idx, data_packet, sizeof(data_packet));
-	if (ret != sizeof(data_packet)) {
+	if (ret != (int)sizeof(data_packet)) {
 		msg_perr("Command Write SPI Bulk failed, %s!\n", libusb_error_name(ret));
 		return 1;
 	}
@@ -743,7 +743,7 @@ static int dediprog_spi_send_command(struct flashctx *flash,
 		value = 0;
 	}
 	ret = dediprog_write(CMD_TRANSCEIVE, value, idx, writearr, writecnt);
-	if (ret != writecnt) {
+	if (ret != (int)writecnt) {
 		msg_perr("Send SPI failed, expected %i, got %i %s!\n",
 			 writecnt, ret, libusb_error_name(ret));
 		return 1;
@@ -770,7 +770,7 @@ static int dediprog_spi_send_command(struct flashctx *flash,
 	ret = dediprog_read(CMD_TRANSCEIVE, value, idx, readarr, readcnt);
 	*/
 	ret = dediprog_read(CMD_TRANSCEIVE, 0, 0, readarr, readcnt);
-	if (ret != readcnt) {
+	if (ret != (int)readcnt) {
 		msg_perr("Receive SPI failed, expected %i, got %i %s!\n", readcnt, ret, libusb_error_name(ret));
 		return 1;
 	}
@@ -804,7 +804,7 @@ static int dediprog_check_devicestring(void)
 	int sfnum;
 	int fw[3];
 	if (sscanf(buf, "SF%d V:%d.%d.%d ", &sfnum, &fw[0], &fw[1], &fw[2]) != 4 ||
-	    sfnum != dediprog_devicetype) {
+	    sfnum != (int)dediprog_devicetype) {
 		msg_perr("Unexpected firmware version string '%s'\n", buf);
 		return 1;
 	}
@@ -966,7 +966,6 @@ static int parse_voltage(char *voltage)
 }
 
 static struct spi_master spi_master_dediprog = {
-	.type		= SPI_CONTROLLER_DEDIPROG,
 	.features	= SPI_MASTER_NO_4BA_MODES,
 	.max_data_read	= 16, /* 18 seems to work fine as well, but 19 times out sometimes with FW 5.15. */
 	.max_data_write	= 16,

@@ -31,9 +31,6 @@
 
 static void cli_classic_usage(const char *name)
 {
-	printf("Please note that the command line interface for flashrom has changed between\n"
-	       "0.9.5 and 0.9.6 and will change again before flashrom 1.0.\n\n");
-
 	printf("Usage: %s [-h|-R|-L|"
 #if CONFIG_PRINT_WIKI == 1
 	       "-z|"
@@ -386,6 +383,11 @@ int main(int argc, char *argv[])
 			fprintf(stderr, "Log file not supported in standalone mode. Aborting.\n");
 			cli_classic_abort_usage();
 #else /* STANDALONE */
+			if (logfile) {
+				fprintf(stderr, "Warning: -o/--output specified multiple times.\n");
+				free(logfile);
+			}
+
 			logfile = strdup(optarg);
 			if (logfile[0] == '\0') {
 				fprintf(stderr, "No log filename specified.\n");
@@ -480,7 +482,6 @@ int main(int argc, char *argv[])
 				  programmer_table[CONFIG_DEFAULT_PROGRAMMER].name, pparam);
 		} else {
 			msg_perr("Please select a programmer with the --programmer parameter.\n"
-				 "Previously this was not necessary because there was a default set.\n"
 #if CONFIG_INTERNAL == 1
 				 "To choose the mainboard of this computer use 'internal'. "
 #endif
@@ -506,7 +507,7 @@ int main(int argc, char *argv[])
 
 	for (j = 0; j < registered_master_count; j++) {
 		startchip = 0;
-		while (chipcount < ARRAY_SIZE(flashes)) {
+		while (chipcount < (int)ARRAY_SIZE(flashes)) {
 			startchip = probe_flash(&registered_masters[j], startchip, &flashes[chipcount], 0);
 			if (startchip == -1)
 				break;
